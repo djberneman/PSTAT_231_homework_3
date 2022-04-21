@@ -148,6 +148,19 @@ qda_fit
 ### Question 8
 
 **Repeat Question 5**, but this time specify a naive Bayes model for classification using the `"klaR"` engine. Set the `usekernel` argument to `FALSE`.
+```{r}
+nb_mod <- naive_Bayes() %>% 
+  set_mode("classification") %>% 
+  set_engine("klaR") %>% 
+  set_args(usekernel = FALSE) 
+
+nb_wkflow <- workflow() %>% 
+  add_model(nb_mod) %>% 
+  add_recipe(titanic_train_recipe)
+
+nb_fit <- fit(nb_wkflow, titanic_train)
+nb_fit
+```
 
 ### Question 9
 
@@ -156,6 +169,32 @@ Now you've fit four different models to your training data.
 Use `predict()` and `bind_cols()` to generate predictions using each of these 4 models and your **training** data. Then use the *accuracy* metric to assess the performance of each of the four models.
 
 Which model achieved the highest accuracy on the training data?
+```{r}
+cbind(predict(log_fit, new_data = titanic_train, type = "prob"),
+predict(lda_fit, new_data = titanic_train, type = "prob"),
+predict(qda_fit, new_data = titanic_train, type = "prob"),
+predict(nb_fit, new_data = titanic_train, type = "prob"))
+
+log_reg_acc <- augment(log_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+
+lda_acc <- augment(lda_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+
+qda_acc <- augment(qda_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+
+nb_acc <- augment(nb_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+
+accuracies <- c(log_reg_acc$.estimate, lda_acc$.estimate, 
+                nb_acc$.estimate, qda_acc$.estimate)
+models <- c("Logistic Regression", "LDA", "Naive Bayes", "QDA")
+results <- tibble(accuracies = accuracies, models = models)
+results %>% 
+  arrange(-accuracies)
+```
+Logistic regression achieved the highest accuracy on the training data.
 
 ### Question 10
 
@@ -164,6 +203,21 @@ Fit the model with the highest training accuracy to the **testing** data. Report
 Again using the **testing** data, create a confusion matrix and visualize it. Plot an ROC curve and calculate the area under it (AUC).
 
 How did the model perform? Compare its training and testing accuracies. If the values differ, why do you think this is so?
+```{r}
+predict(log_fit, new_data = titanic_test, type = "prob")
+predict(log_fit, new_data = titanic_train, type = "prob")
+
+augment(log_fit, new_data = titanic_train) %>%
+  conf_mat(truth = survived, estimate = .pred_class)
+
+augment(log_fit, new_data = titanic_train) %>%
+  conf_mat(truth = survived, estimate = .pred_class) %>%
+  autoplot(type = "heatmap")
+
+augment(log_fit, new_data = titanic_test) %>%
+  roc_curve(survived, .pred_Yes) %>%
+  autoplot()
+```
 
 ### Required for 231 Students
 
