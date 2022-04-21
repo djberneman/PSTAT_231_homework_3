@@ -40,6 +40,7 @@ tidymodels_prefer()
 titanic <- read_csv("titanic.csv")
 titanic$survived = factor(titanic$survived, levels=c("Yes", "No"))
 titanic$pclass = factor(titanic$pclass)
+titanic$sex = factor(titanic$sex)
 ```
 
 ### Question 1
@@ -170,11 +171,13 @@ Use `predict()` and `bind_cols()` to generate predictions using each of these 4 
 
 Which model achieved the highest accuracy on the training data?
 ```{r}
-cbind(predict(log_fit, new_data = titanic_train, type = "prob"),
+bind_cols(predict(log_fit, new_data = titanic_train, type = "prob"),
 predict(lda_fit, new_data = titanic_train, type = "prob"),
 predict(qda_fit, new_data = titanic_train, type = "prob"),
-predict(nb_fit, new_data = titanic_train, type = "prob"))
-
+predict(nb_fit, new_data = titanic_train, type = "prob"),
+titanic_train$survived)
+```
+```{r}
 log_reg_acc <- augment(log_fit, new_data = titanic_train) %>%
   accuracy(truth = survived, estimate = .pred_class)
 
@@ -189,8 +192,11 @@ nb_acc <- augment(nb_fit, new_data = titanic_train) %>%
 
 accuracies <- c(log_reg_acc$.estimate, lda_acc$.estimate, 
                 nb_acc$.estimate, qda_acc$.estimate)
+
 models <- c("Logistic Regression", "LDA", "Naive Bayes", "QDA")
+
 results <- tibble(accuracies = accuracies, models = models)
+
 results %>% 
   arrange(-accuracies)
 ```
@@ -205,19 +211,35 @@ Again using the **testing** data, create a confusion matrix and visualize it. Pl
 How did the model perform? Compare its training and testing accuracies. If the values differ, why do you think this is so?
 ```{r}
 predict(log_fit, new_data = titanic_test, type = "prob")
-predict(log_fit, new_data = titanic_train, type = "prob")
+```
+```{r}
+metric <- metric_set(accuracy)
 
+augment(log_fit, new_data = titanic_test) %>%
+  metric(truth = survived, estimate = .pred_class)
+
+augment(log_fit, new_data = titanic_train) %>%
+  metric(truth = survived, estimate = .pred_class)
+```
+```{r}
 augment(log_fit, new_data = titanic_train) %>%
   conf_mat(truth = survived, estimate = .pred_class)
 
 augment(log_fit, new_data = titanic_train) %>%
   conf_mat(truth = survived, estimate = .pred_class) %>%
   autoplot(type = "heatmap")
-
+```
+```{r}
 augment(log_fit, new_data = titanic_test) %>%
   roc_curve(survived, .pred_Yes) %>%
   autoplot()
+
+augment(log_fit, new_data = titanic_test) %>%
+  roc_auc(survived, .pred_Yes)
 ```
+The accuracy of the model on the testing data is 82.84%.
+The model performed pretty well.
+The training and test accuracies are very close.
 
 ### Required for 231 Students
 
@@ -228,17 +250,53 @@ In a binary classification problem, let $p$ represent the probability of class l
 Given that:
 
 $$
+logistic\ function: \ p(z)=\frac{e^z}{1+e^z}\\
+logit\ function: \ z(p)=ln\left(\frac{p}{1-p}\right)
+$$
+
+Prove that the inverse of a logistic function is indeed the *logit* function.
+
+$$
+Let\ z(p)=ln\left(\frac{p}{1-p}\right)\\
+e^z=\frac{p}{1-p}\\
+1+e^z=\frac{1-p}{1-p}+\frac{p}{1-p}\\
+1+e^z=\frac{1}{1-p}\\
+\frac{1}{1+e^z}=1-p\\
+p=1-\frac{1}{1+e^z}\\
+p=\frac{1+e^z}{1+e^z}-\frac{1}{1+e^z}\\
 p(z)=\frac{e^z}{1+e^z}
-$$
-
-Prove that the inverse of a logistic function is indeed the *logit* function:
-
-$$
-z(p)=ln\left(\frac{p}{1-p}\right)
 $$
 
 ### Question 12
 
 Assume that $z = \beta_0 + \beta_{1}x_{1}$ and $p = logistic(z)$. How do the odds of the outcome change if you increase $x_{1}$ by two? Demonstrate this.
-
+$$
+Given:\ z = \beta_0 + \beta_{1}x_{1},\\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ p = logistic(z),\\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \  \ logistic(z)=\frac{e^z}{1+e^z}\\
+=>\ \ z = \frac{e^{\beta_0 + \beta_{1}x_{1}}}{1+e^{\beta_0 + \beta_{1}x_{1}}}\\
+\ \ If\ x_{1}\ increases\ by\ 2,\ then\ z = \frac{e^{\beta_0 + \beta_{1}(x_{1}+2)}}{1+e^{\beta_0 + \beta_{1}(x_{1}+2)}}\\
+The\ outcome\ change\ would\ be\ \frac{e^{\beta_0 + \beta_{1}x_{1}}}{1+e^{\beta_0 + \beta_{1}x_{1}}} \div \frac{e^{\beta_0 + \beta_{1}(x_{1}+2)}}{1+e^{\beta_0 + \beta_{1}(x_{1}+2)}} \\ 
+=> \frac{e^{\beta_0 + \beta_{1}x_{1}}}{1+e^{\beta_0 + \beta_{1}x_{1}}} \times \frac{1+e^{\beta_0 + \beta_{1}(x_{1}+2)}}{e^{\beta_0 + \beta_{1}(x_{1}+2)}}\\
+=> \frac{1+e^{\beta_0 + \beta_{1}(x_{1}+2)}}{1+e^{\beta_0 + \beta_{1}x_{1}}} \times e^{-2\beta_{1}}
+$$
 Assume now that $\beta_1$ is negative. What value does $p$ approach as $x_{1}$ approaches $\infty$? What value does $p$ approach as $x_{1}$ approaches $-\infty$?
+
+Assuming $\beta_1$ is negative:
+As $x_{1}$ approaches $\infty$, $p$ approaches:
+$$
+\lim _{x \rightarrow \infty}\frac{e^{\beta_0 - \beta_{1}x_{1}}}{1+e^{\beta_0 - \beta_{1}x_{1}}}\\
+=> \lim _{x \rightarrow \infty}\frac{e^{\beta_0 - \beta_{1}\infty}}{1+e^{\beta_0 - \beta_{1}\infty}}\\
+=>\lim _{x \rightarrow \infty} \frac{e^{-\infty}}{1+e^{-\infty}} \\
+=>\lim _{x \rightarrow \infty} \frac{0}{1+0}\\
+=>\lim _{x \rightarrow \infty} 0\\
+0
+$$
+As $x_{1}$ approaches $-\infty$, $p$ approaches:
+$$
+\lim _{x \rightarrow -\infty}\frac{e^{\beta_0 - \beta_{1}x_{1}}}{1+e^{\beta_0 - \beta_{1}x_{1}}}\\
+Using\ L'Hopital's\ rule => \lim _{x \rightarrow -\infty}\frac{e^{\beta_0 - \beta_{1}x_{1}}}{e^{\beta_0 - \beta_{1}x_{1}}}\\
+=>\lim _{x \rightarrow -\infty} e^{\beta_0 - \beta_{1}x_{1} - ({\beta_0 - \beta_{1}x_{1}})}\\
+=>\lim _{x \rightarrow -\infty} e^{\beta_0 - \beta_{0} - \beta_{1}x_{1} +\beta_{1}x_{1}}\\
+=>\lim _{x \rightarrow -\infty} e^{0}\\
+=>\lim _{x \rightarrow -\infty}1\\
+1
+$$
